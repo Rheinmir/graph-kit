@@ -1,0 +1,10 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(pip install:*)",
+      "Bash(python indexer.py . --db ./graph.db)",
+      "Bash(python -c \":*)",
+      "Bash(python setup.py --repo D:/graph-agent --dry-run)"
+    ]
+  }
+}

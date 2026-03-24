@@ -1,0 +1,41 @@
+What is Grapuco? 
+Grapuco analyzes your source code and builds a knowledge graph — representing your entire codebase’s structure, dependencies, and call flows. This graph is then used by AI coding assistants (via MCP) to deeply understand your code.
+
+This extension connects your VS Code workspace to Grapuco, keeping your knowledge graph always up to date.
+
+Features 
+📤 Upload Repository — Zip and push your entire codebase to Grapuco with one click
+🔗 Link Existing — Connect to a repository already on Grapuco
+🔄 Incremental Sync — Only push changed files via git diff (fast & efficient)
+⚡ Auto Sync — Optionally sync on every file save
+🎨 Theme Support — Adapts to dark, light, and high contrast themes
+🔒 Secure — API key stored in VS Code’s encrypted SecretStorage
+Getting Started 
+1. Get your API Key 
+Sign up at grapuco.com and create an API key from your dashboard.
+
+2. Sign In 
+Open the Grapuco panel in the sidebar (activity bar icon) and paste your API key.
+
+3. Connect a Repository 
+Choose one:
+
+Upload New — zips all git-tracked files and uploads them
+Link Existing — select from your already-indexed repositories
+4. Sync Changes 
+After linking, the dashboard shows your repo status. Click Sync Changes to push your latest modifications, or enable auto-sync in settings.
+
+Extension Settings 
+Setting	Default	Description
+grapuco.apiBaseUrl	https://api.grapuco.com	Backend API URL
+grapuco.autoSync	false	Auto-sync on file save
+grapuco.autoSyncDelay	5000	Delay before auto-sync (ms)
+Requirements 
+A Git-initialized workspace
+A Grapuco account with an API key
+Links 
+Website
+Dashboard
+Report Issues
+License 
+MIT

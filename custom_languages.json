@@ -1,0 +1,30 @@
+{
+  "_comment": "Thêm ngôn ngữ tùy chỉnh ở đây. Xem hướng dẫn trong parser.py.",
+
+  "_example_solidity": {
+    "extensions": [".sol"],
+    "tree_sitter_lang": "solidity",
+    "function_node_types": ["function_definition"],
+    "class_node_types":    ["contract_definition"],
+    "call_node_types":     ["call_expression"],
+    "import_node_types":   ["import_directive"],
+    "name_field":          "name"
+  },
+
+  "_example_lua": {
+    "extensions": [".lua"],
+    "tree_sitter_lang": "lua",
+    "function_node_types": ["function_declaration", "local_function"],
+    "class_node_types":    [],
+    "call_node_types":     ["function_call"],
+    "import_node_types":   ["function_call"],
+    "name_field":          "name"
+  },
+
+  "_example_custom_module": {
+    "_doc": "Dùng custom_module nếu cần logic phức tạp hơn",
+    "extensions": [".xyz"],
+    "tree_sitter_lang": "xyz",
+    "custom_module": "lang_xyz"
+  }
+}
