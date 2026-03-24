@@ -148,12 +148,15 @@ def _uninstall(dry_run: bool, keep_dbs: bool):
     elif cursor_cfg.exists() and dry_run:
         print(f"  would remove 'code-graph' from {cursor_cfg}")
 
-    # 3. graph-index wrapper
+    # 3. global wrappers
     if sys.platform == "win32":
-        cmd_path = Path(os.environ.get("LOCALAPPDATA", Path.home())) / "graph-agent" / "graph-index.bat"
+        cmd_dir = Path(os.environ.get("LOCALAPPDATA", Path.home())) / "graph-agent"
+        _remove(cmd_dir / "graph-index.bat", "graph-index command")
+        _remove(cmd_dir / "graph-stats.bat",  "graph-stats command")
     else:
-        cmd_path = Path.home() / ".local" / "bin" / "graph-index"
-    _remove(cmd_path, "graph-index command")
+        bin_dir = Path.home() / ".local" / "bin"
+        _remove(bin_dir / "graph-index", "graph-index command")
+        _remove(bin_dir / "graph-stats",  "graph-stats command")
 
     # 4. .venv
     _remove(VENV, ".venv")
@@ -204,6 +207,32 @@ def _install_global_cmd(dry_run: bool):
     print(hint)
 
 
+def _install_global_stats_cmd(dry_run: bool):
+    """Install a `graph-stats` command to view usage dashboard."""
+    python = str(_venv_python())
+    stats  = str(HERE / "stats.py")
+
+    if sys.platform == "win32":
+        cmd_dir  = Path(os.environ.get("LOCALAPPDATA", Path.home())) / "graph-agent"
+        cmd_path = cmd_dir / "graph-stats.bat"
+        content  = f'@echo off\n"{python}" "{stats}" %*\n'
+    else:
+        cmd_dir  = Path.home() / ".local" / "bin"
+        cmd_path = cmd_dir / "graph-stats"
+        content  = f'#!/bin/sh\nexec "{python}" "{stats}" "$@"\n'
+
+    if dry_run:
+        print(f"\n--- would create {cmd_path} ---")
+        print(content)
+        return
+
+    cmd_dir.mkdir(parents=True, exist_ok=True)
+    cmd_path.write_text(content)
+    if sys.platform != "win32":
+        cmd_path.chmod(0o755)
+    print(f"  Installed → {cmd_path}")
+
+
 # ── Register with Claude Code CLI (claude mcp add) ────────────────────
 
 def _register_claude_code(dry_run: bool):
@@ -240,6 +269,7 @@ subprocess.run(setup_args, check=True)
 
 print()
 _install_global_cmd(dry_run=args.dry_run)
+_install_global_stats_cmd(dry_run=args.dry_run)
 
 print()
 _register_claude_code(dry_run=args.dry_run)
@@ -257,3 +287,4 @@ if not args.dry_run:
     print()
     print("To index a project:  graph-index /path/to/project")
     print("                 or: python3 indexer.py /path/to/project")
+    print("To view usage stats: graph-stats")

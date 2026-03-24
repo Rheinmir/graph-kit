@@ -127,3 +127,45 @@ def get_summary() -> dict:
             "estimated_tokens_saved": total_tokens,
         },
     }
+
+
+# ── CLI ────────────────────────────────────────────────────────────────
+
+def _print_dashboard():
+    data = get_summary()
+    by_project = data["by_project"]
+    totals = data["totals"]
+
+    if not by_project:
+        print("No tool calls recorded yet.")
+        print(f"Stats DB: {_STATS_PATH}")
+        return
+
+    W = 60
+    print("=" * W)
+    print(f"  graph-kit usage stats")
+    print(f"  DB: {_STATS_PATH}")
+    print("=" * W)
+
+    for project, info in sorted(by_project.items(), key=lambda x: -x[1]["calls"]):
+        calls = info["calls"]
+        tokens = info["estimated_tokens_saved"]
+        print(f"\n  {project}")
+        print(f"  {'─' * (W - 4)}")
+        print(f"    Tool calls          : {calls}")
+        print(f"    Est. tokens saved   : ~{tokens:,}")
+        if info["top_tools"]:
+            print(f"    Top tools:")
+            for t in info["top_tools"]:
+                bar = "█" * min(t["calls"], 30)
+                print(f"      {t['tool']:<24} {t['calls']:>4}  {bar}")
+
+    print()
+    print("=" * W)
+    print(f"  TOTAL calls          : {totals['calls']}")
+    print(f"  TOTAL tokens saved   : ~{totals['estimated_tokens_saved']:,}")
+    print("=" * W)
+
+
+if __name__ == "__main__":
+    _print_dashboard()
