@@ -111,7 +111,7 @@ def index_repo(repo_path: str, db_path: str = graph_db.DB_PATH, force: bool = Fa
     if not os.path.isdir(repo_path):
         raise ValueError(f"Not a directory: {repo_path}")
 
-    graph_db.init_db(db_path)
+    graph_db.init_db(db_path, repo_root=repo_path)
     conn = graph_db.get_conn(db_path)
 
     total = indexed = skipped = errors = 0
@@ -150,7 +150,7 @@ def index_repo(repo_path: str, db_path: str = graph_db.DB_PATH, force: bool = Fa
 
 def main():
     ap = argparse.ArgumentParser(description="Index a codebase into a local knowledge graph.")
-    ap.add_argument("repo", help="Path to the repository root")
+    ap.add_argument("repo", nargs="?", default=".", help="Path to repo root (default: current directory)")
     ap.add_argument("--db", default=None, help="SQLite DB path (default: auto ~/.graph-agent/<name>.db)")
     ap.add_argument("--force", action="store_true", help="Re-index all files even if unchanged")
     args = ap.parse_args()

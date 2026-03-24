@@ -1,5 +1,7 @@
 # code-graph — Local Code Knowledge Graph for AI Assistants
 
+
+
 Phân tích codebase → lưu graph vào SQLite → AI trong IDE query được structure của code.
 
 ## Yêu cầu
@@ -14,7 +16,7 @@ pip install -r requirements.txt
 ---
 
 ## Cài nhanh (tự động)
-
+Kéo về inject vào model và nhờ agent cài hoặc thủ công:
 ```bash
 python setup.py --repo /path/to/your/project
 ```

@@ -17,11 +17,16 @@ DB_PATH = os.environ.get("GRAPH_DB", str(_GRAPH_DIR / "default.db"))
 def db_path_for_repo(repo_path: str) -> str:
     """Return a stable DB path for a given repo, stored in ~/.graph-agent/."""
     repo = Path(repo_path).resolve()
-    # use folder name + short hash of full path for uniqueness
     name = repo.name
     h = hashlib.sha1(str(repo).encode()).hexdigest()[:8]
     _GRAPH_DIR.mkdir(parents=True, exist_ok=True)
     return str(_GRAPH_DIR / f"{name}-{h}.db")
+
+
+def get_all_db_paths() -> list[str]:
+    """Return paths of all project DBs in ~/.graph-agent/."""
+    _GRAPH_DIR.mkdir(parents=True, exist_ok=True)
+    return [str(p) for p in sorted(_GRAPH_DIR.glob("*.db"))]
 
 
 def get_conn(db_path: str = DB_PATH) -> sqlite3.Connection:
@@ -32,9 +37,14 @@ def get_conn(db_path: str = DB_PATH) -> sqlite3.Connection:
     return conn
 
 
-def init_db(db_path: str = DB_PATH):
+def init_db(db_path: str = DB_PATH, repo_root: str = None):
     conn = get_conn(db_path)
     conn.executescript("""
+        CREATE TABLE IF NOT EXISTS meta (
+            key   TEXT PRIMARY KEY,
+            value TEXT
+        );
+
         CREATE TABLE IF NOT EXISTS files (
             id       INTEGER PRIMARY KEY,
             path     TEXT UNIQUE NOT NULL,
@@ -69,7 +79,24 @@ def init_db(db_path: str = DB_PATH):
         CREATE INDEX IF NOT EXISTS idx_edges_kind      ON edges(kind);
     """)
     conn.commit()
+    if repo_root:
+        conn.execute(
+            "INSERT OR REPLACE INTO meta(key, value) VALUES ('repo_root', ?)",
+            (str(Path(repo_root).resolve()),)
+        )
+        conn.commit()
     conn.close()
+
+
+def get_repo_root(db_path: str) -> str | None:
+    """Return the repo root stored in this DB, or None."""
+    try:
+        conn = get_conn(db_path)
+        row = conn.execute("SELECT value FROM meta WHERE key='repo_root'").fetchone()
+        conn.close()
+        return row["value"] if row else None
+    except Exception:
+        return None
 
 
 # ── File helpers ─────────────────────────────────────────────────────
