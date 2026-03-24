@@ -134,10 +134,39 @@ def _install_global_cmd(dry_run: bool):
     print(hint)
 
 
+# ── Register with Claude Code CLI (claude mcp add) ────────────────────
+
+def _register_claude_code(dry_run: bool):
+    """Register graph-kit into Claude Code CLI via `claude mcp add`."""
+    import shutil
+    if not shutil.which("claude"):
+        print("  [skip] claude CLI not found — skipping Claude Code registration")
+        return
+
+    python = str(_venv_python())
+    server = str(HERE / "server.py")
+    cmd = ["claude", "mcp", add_cmd := "add", "-s", "user",
+           "graph-kit", "--", python, server, "--watch"]
+
+    if dry_run:
+        print(f"\n--- would run ---")
+        print("  " + " ".join(cmd))
+        return
+
+    result = subprocess.run(cmd, capture_output=True, text=True)
+    if result.returncode == 0:
+        print(f"  Registered with Claude Code CLI ✓")
+    else:
+        # already exists = fine
+        if "already exists" in result.stderr or "already exists" in result.stdout:
+            print(f"  Claude Code CLI: graph-kit already registered ✓")
+        else:
+            print(f"  [warn] claude mcp add failed: {result.stderr.strip()}")
+
+
 # ── Run setup + install global command ───────────────────────────────
 
 setup_args = [sys.executable, str(HERE / "setup.py")]
-# no --repo here: server now serves all indexed projects automatically
 setup_args += ["--target", args.target]
 if args.dry_run:
     setup_args.append("--dry-run")
@@ -146,6 +175,9 @@ subprocess.run(setup_args, check=True)
 
 print()
 _install_global_cmd(dry_run=args.dry_run)
+
+print()
+_register_claude_code(dry_run=args.dry_run)
 
 # index the first repo if provided
 if args.repo and not args.dry_run:
@@ -159,4 +191,4 @@ if not args.dry_run:
     print("Next: restart Cursor (or Claude Desktop).")
     print()
     print("To index a project:  graph-index /path/to/project")
-    print("                 or: python indexer.py /path/to/project")
+    print("                 or: python3 indexer.py /path/to/project")
