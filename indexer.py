@@ -106,12 +106,27 @@ def index_file(conn: sqlite3.Connection, abs_path: str, rel_path: str, force: bo
     return True
 
 
+def _gitignore_db(repo_path: str):
+    """Add .graph-agent/ to .gitignore if the repo uses git."""
+    gitignore = Path(repo_path) / ".gitignore"
+    entry = ".graph-agent/"
+    if gitignore.exists():
+        if entry in gitignore.read_text(encoding="utf-8"):
+            return
+        with open(gitignore, "a", encoding="utf-8") as f:
+            f.write(f"\n# graph-kit index\n{entry}\n")
+    elif (Path(repo_path) / ".git").exists():
+        gitignore.write_text(f"# graph-kit index\n{entry}\n", encoding="utf-8")
+
+
 def index_repo(repo_path: str, db_path: str = graph_db.DB_PATH, force: bool = False) -> dict:
     """Index an entire repo. Returns stats dict."""
     if not os.path.isdir(repo_path):
         raise ValueError(f"Not a directory: {repo_path}")
 
     graph_db.init_db(db_path, repo_root=repo_path)
+    graph_db.register_repo(repo_path)
+    _gitignore_db(repo_path)
     conn = graph_db.get_conn(db_path)
 
     total = indexed = skipped = errors = 0

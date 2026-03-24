@@ -7,26 +7,51 @@ import sqlite3
 import os
 from pathlib import Path
 
-# Central directory for all project DBs
-_GRAPH_DIR = Path(os.environ.get("GRAPH_HOME", Path.home() / ".graph-agent"))
+# Default DB path fallback
+DB_PATH = os.environ.get("GRAPH_DB", "./graph.db")
 
-# Default DB path — overridden when --repo is passed to server/indexer
-DB_PATH = os.environ.get("GRAPH_DB", str(_GRAPH_DIR / "default.db"))
+# Folder name inside each project
+_DB_DIR = ".graph-agent"
+_DB_FILE = "index.db"
 
 
 def db_path_for_repo(repo_path: str) -> str:
-    """Return a stable DB path for a given repo, stored in ~/.graph-agent/."""
+    """Return <repo>/.graph-agent/index.db — lives inside the project."""
     repo = Path(repo_path).resolve()
-    name = repo.name
-    h = hashlib.sha1(str(repo).encode()).hexdigest()[:8]
-    _GRAPH_DIR.mkdir(parents=True, exist_ok=True)
-    return str(_GRAPH_DIR / f"{name}-{h}.db")
+    db_dir = repo / _DB_DIR
+    db_dir.mkdir(parents=True, exist_ok=True)
+    return str(db_dir / _DB_FILE)
 
 
 def get_all_db_paths() -> list[str]:
-    """Return paths of all project DBs in ~/.graph-agent/."""
-    _GRAPH_DIR.mkdir(parents=True, exist_ok=True)
-    return [str(p) for p in sorted(_GRAPH_DIR.glob("*.db"))]
+    """Scan known indexed repos by looking for .graph-agent/index.db in meta registry."""
+    registry = Path(os.environ.get("GRAPH_HOME", Path.home() / ".graph-agent"))
+    registry.mkdir(parents=True, exist_ok=True)
+    registry_file = registry / "repos.txt"
+    if not registry_file.exists():
+        return []
+    paths = []
+    for line in registry_file.read_text(encoding="utf-8").splitlines():
+        line = line.strip()
+        if line:
+            db = Path(line) / _DB_DIR / _DB_FILE
+            if db.exists():
+                paths.append(str(db))
+    return paths
+
+
+def register_repo(repo_path: str):
+    """Add repo to the central registry so get_all_db_paths() can find it."""
+    registry = Path(os.environ.get("GRAPH_HOME", Path.home() / ".graph-agent"))
+    registry.mkdir(parents=True, exist_ok=True)
+    registry_file = registry / "repos.txt"
+    repo = str(Path(repo_path).resolve())
+    existing = set()
+    if registry_file.exists():
+        existing = set(registry_file.read_text(encoding="utf-8").splitlines())
+    if repo not in existing:
+        with open(registry_file, "a", encoding="utf-8") as f:
+            f.write(repo + "\n")
 
 
 def get_conn(db_path: str = DB_PATH) -> sqlite3.Connection:
