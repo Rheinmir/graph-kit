@@ -32,6 +32,7 @@ import sys
 from mcp.server.fastmcp import FastMCP
 
 import db as graph_db
+import stats as graph_stats
 
 # ── Init ──────────────────────────────────────────────────────────────
 
@@ -118,6 +119,15 @@ def _repo_conn(repo_path: str):
     return graph_db.get_conn(graph_db.db_path_for_repo(repo_path))
 
 
+# ── Stats logging helper ──────────────────────────────────────────────
+
+def _log(tool: str, result, repo: str | None = None):
+    """Log a tool call and return the result unchanged."""
+    n = len(result) if isinstance(result, (list, dict)) else 0
+    graph_stats.log_call(tool, repo, n)
+    return result
+
+
 # ── Tools ─────────────────────────────────────────────────────────────
 
 @mcp.tool()
@@ -134,16 +144,17 @@ def get_stats() -> dict:
             totals["edges"]   += s["edges"]
         finally:
             conn.close()
-    return totals
+    return _log("get_stats", totals)
 
 
 @mcp.tool()
 def list_projects() -> list[str]:
     """List all indexed projects (repo names)."""
-    return [
+    result = [
         os.path.basename(p).rsplit("-", 1)[0]
         for p in graph_db.get_all_db_paths()
     ]
+    return _log("list_projects", result)
 
 
 @mcp.tool()
@@ -155,7 +166,7 @@ def search_symbols(query: str, kind: str = None) -> list[dict]:
         query: Partial or full symbol name (case-insensitive substring match).
         kind:  Optional filter — one of: function, class, method.
     """
-    return _each_db(lambda c: graph_db.search_symbols(c, query, kind))
+    return _log("search_symbols", _each_db(lambda c: graph_db.search_symbols(c, query, kind)))
 
 
 @mcp.tool()
@@ -166,7 +177,7 @@ def get_file_symbols(file_path: str) -> list[dict]:
     Args:
         file_path: Relative path from repo root (e.g. "src/api/auth.py").
     """
-    return _each_db(lambda c: graph_db.get_file_symbols(c, file_path))
+    return _log("get_file_symbols", _each_db(lambda c: graph_db.get_file_symbols(c, file_path)))
 
 
 @mcp.tool()
@@ -177,7 +188,7 @@ def get_callers(function_name: str) -> list[dict]:
     Args:
         function_name: Exact function/method name.
     """
-    return _each_db(lambda c: graph_db.get_callers(c, function_name))
+    return _log("get_callers", _each_db(lambda c: graph_db.get_callers(c, function_name)))
 
 
 @mcp.tool()
@@ -188,7 +199,7 @@ def get_callees(function_name: str) -> list[dict]:
     Args:
         function_name: Exact function/method name.
     """
-    return _each_db(lambda c: graph_db.get_callees(c, function_name))
+    return _log("get_callees", _each_db(lambda c: graph_db.get_callees(c, function_name)))
 
 
 @mcp.tool()
@@ -199,7 +210,7 @@ def get_file_imports(file_path: str) -> list[dict]:
     Args:
         file_path: Relative path from repo root (e.g. "src/utils/helpers.ts").
     """
-    return _each_db(lambda c: graph_db.get_file_imports(c, file_path))
+    return _log("get_file_imports", _each_db(lambda c: graph_db.get_file_imports(c, file_path)))
 
 
 @mcp.tool()
@@ -215,11 +226,12 @@ def get_symbol_context(symbol_name: str) -> dict:
         s for s in graph_db.search_symbols(c, symbol_name)
         if s["name"] == symbol_name
     ])
-    return {
+    result = {
         "definition": definition,
         "callers":    _each_db(lambda c: graph_db.get_callers(c, symbol_name)),
         "callees":    _each_db(lambda c: graph_db.get_callees(c, symbol_name)),
     }
+    return _log("get_symbol_context", result)
 
 
 def _find_repo_root(file_path: str) -> str | None:
@@ -256,6 +268,7 @@ def reindex_repo(repo_path: str = "", force: bool = False) -> dict:
     # auto-watch the repo if --watch flag is on
     if args.watch:
         _ensure_watching(target, db)
+    graph_stats.log_call("reindex_repo", target, result.get("indexed", 0))
     return result
 
 
@@ -281,6 +294,7 @@ def reindex_file(file_path: str, repo_path: str = "") -> dict:
         index_file(conn, abs_path, file_path, force=True)
         conn.commit()
         syms = len(graph_db.get_file_symbols(conn, file_path))
+        graph_stats.log_call("reindex_file", target, syms)
         return {"status": "ok", "file": file_path, "symbols": syms}
     except Exception as e:
         return {"error": str(e)}
@@ -307,7 +321,18 @@ def list_files(directory: str = "", language: str = None) -> list[str]:
             sql += " AND language = ?"
             params.append(language)
         return [r["path"] for r in conn.execute(sql, params).fetchall()]
-    return _each_db(_query)
+    return _log("list_files", _each_db(_query))
+
+
+@mcp.tool()
+def get_usage_stats() -> dict:
+    """
+    Show how many times each graph tool has been called, broken down by project.
+    Also shows estimated tokens saved vs reading files manually.
+
+    Returns a summary grouped by project name with total call counts and top tools.
+    """
+    return graph_stats.get_summary()
 
 
 # ── Entrypoint ────────────────────────────────────────────────────────
