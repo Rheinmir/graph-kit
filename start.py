@@ -14,6 +14,7 @@ Script tự:
   4. Gọi setup.py để đăng ký MCP vào Cursor/Claude Desktop
 """
 from __future__ import annotations
+import json
 import os
 import subprocess
 import sys
@@ -88,17 +89,86 @@ ap = argparse.ArgumentParser(
     formatter_class=argparse.RawDescriptionHelpFormatter,
     epilog="""
 Examples:
-  python start.py --repo /path/to/project
-  python start.py --repo /path/to/project --target claude
-  python start.py --repo /path/to/project --dry-run
+  python start.py --repo /path/to/project     # install
+  python start.py --uninstall                 # remove everything
+  python start.py --uninstall --keep-dbs      # remove but keep indexed data
 """,
 )
-ap.add_argument("--repo",    default=None, help="Repo to index on server startup")
-ap.add_argument("--target",  default="cursor",
+ap.add_argument("--repo",      default=None, help="Repo to index on server startup")
+ap.add_argument("--target",    default="cursor",
                 choices=["cursor", "cursor-project", "claude"],
                 help="Where to install MCP config (default: cursor)")
-ap.add_argument("--dry-run", action="store_true", help="Preview without writing files")
+ap.add_argument("--dry-run",   action="store_true", help="Preview without writing files")
+ap.add_argument("--uninstall", action="store_true", help="Remove graph-kit from this machine")
+ap.add_argument("--keep-dbs",  action="store_true", help="Keep ~/.graph-agent/*.db when uninstalling")
 args = ap.parse_args()
+
+# ── Uninstall ─────────────────────────────────────────────────────────
+
+def _uninstall(dry_run: bool, keep_dbs: bool):
+    import shutil as _shutil
+
+    def _remove(path: Path, label: str):
+        if not path.exists():
+            print(f"  [skip] {label} not found")
+            return
+        if dry_run:
+            print(f"  would remove {path}")
+            return
+        if path.is_dir():
+            _shutil.rmtree(path)
+        else:
+            path.unlink()
+        print(f"  Removed {label}")
+
+    print("Uninstalling graph-kit...\n")
+
+    # 1. Claude Code CLI
+    if _shutil.which("claude"):
+        cmd = ["claude", "mcp", "remove", "graph-kit", "-s", "user"]
+        if dry_run:
+            print(f"  would run: {' '.join(cmd)}")
+        else:
+            r = subprocess.run(cmd, capture_output=True, text=True)
+            if r.returncode == 0:
+                print("  Removed from Claude Code CLI")
+            else:
+                print(f"  [skip] Claude Code CLI: {r.stderr.strip() or 'not registered'}")
+
+    # 2. Cursor config
+    cursor_cfg = Path.home() / ".cursor" / "mcp.json"
+    if cursor_cfg.exists() and not dry_run:
+        try:
+            data = json.loads(cursor_cfg.read_text(encoding="utf-8"))
+            data.get("mcpServers", {}).pop("code-graph", None)
+            cursor_cfg.write_text(json.dumps(data, indent=2), encoding="utf-8")
+            print("  Removed from ~/.cursor/mcp.json")
+        except Exception as e:
+            print(f"  [warn] cursor config: {e}")
+    elif cursor_cfg.exists() and dry_run:
+        print(f"  would remove 'code-graph' from {cursor_cfg}")
+
+    # 3. graph-index wrapper
+    if sys.platform == "win32":
+        cmd_path = Path(os.environ.get("LOCALAPPDATA", Path.home())) / "graph-agent" / "graph-index.bat"
+    else:
+        cmd_path = Path.home() / ".local" / "bin" / "graph-index"
+    _remove(cmd_path, "graph-index command")
+
+    # 4. .venv
+    _remove(VENV, ".venv")
+
+    # 5. DBs in ~/.graph-agent/
+    from db import _GRAPH_DIR
+    if keep_dbs:
+        print(f"  [kept] ~/.graph-agent/ (--keep-dbs)")
+    else:
+        _remove(_GRAPH_DIR, "~/.graph-agent/ (all indexed data)")
+
+    if not dry_run:
+        print()
+        print("Done. Restart Cursor / Claude Code to apply.")
+
 
 # ── Install graph-index global command ───────────────────────────────
 
@@ -163,6 +233,12 @@ def _register_claude_code(dry_run: bool):
         else:
             print(f"  [warn] claude mcp add failed: {result.stderr.strip()}")
 
+
+# ── Dispatch ──────────────────────────────────────────────────────────
+
+if args.uninstall:
+    _uninstall(dry_run=args.dry_run, keep_dbs=args.keep_dbs)
+    sys.exit(0)
 
 # ── Run setup + install global command ───────────────────────────────
 
