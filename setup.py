@@ -45,6 +45,11 @@ def claude_desktop_config() -> Path:
         return Path.home() / ".config" / "Claude" / "claude_desktop_config.json"
 
 
+def claude_code_config() -> Path:
+    """~/.claude.json — Claude Code CLI user-scope MCP config"""
+    return Path.home() / ".claude.json"
+
+
 def build_server_entry(repo: str | None) -> dict:
     args = [str(HERE / "server.py"), "--watch"]
     if repo:
@@ -82,8 +87,8 @@ def main():
     ap.add_argument("--repo", default=None,
                     help="Default repo path to index on startup (optional)")
     ap.add_argument("--target", default="cursor",
-                    choices=["cursor", "cursor-project", "claude"],
-                    help="Where to install: cursor (global), cursor-project, claude (Claude Desktop)")
+                    choices=["cursor", "cursor-project", "claude", "claude-code"],
+                    help="Where to install: cursor (global), cursor-project, claude (Claude Desktop), claude-code (Claude Code CLI)")
     ap.add_argument("--dry-run", action="store_true",
                     help="Print what would be written without touching files")
     args = ap.parse_args()
@@ -91,10 +96,11 @@ def main():
     entry = build_server_entry(args.repo)
 
     if args.target == "cursor":
-        # Try ~/.cursor/mcp.json first (most universal)
         config_path = cursor_dotfile_config()
     elif args.target == "cursor-project":
         config_path = cursor_project_config()
+    elif args.target == "claude-code":
+        config_path = claude_code_config()
     else:
         config_path = claude_desktop_config()
 
@@ -118,6 +124,12 @@ def main():
             print("  2. Open a chat → Claude should now have code-graph tools")
             if not args.repo:
                 print("  3. Set --repo in the config or run:")
+                print(f"       python {HERE / 'indexer.py'} /path/to/your/repo")
+        elif args.target == "claude-code":
+            print("  1. Restart Claude Code (start a new session)")
+            print("  2. Tools code-graph will be available automatically")
+            if not args.repo:
+                print("  3. Index a repo:")
                 print(f"       python {HERE / 'indexer.py'} /path/to/your/repo")
         else:
             print("  1. Restart Claude Desktop")

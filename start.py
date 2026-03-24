@@ -207,31 +207,20 @@ def _install_global_cmd(dry_run: bool):
 # ── Register with Claude Code CLI (claude mcp add) ────────────────────
 
 def _register_claude_code(dry_run: bool):
-    """Register graph-kit into Claude Code CLI via `claude mcp add`."""
-    import shutil
-    if not shutil.which("claude"):
-        print("  [skip] claude CLI not found — skipping Claude Code registration")
-        return
-
+    """Register graph-kit into Claude Code via ~/.claude.json (user scope)."""
     python = str(_venv_python())
-    server = str(HERE / "server.py")
-    cmd = ["claude", "mcp", add_cmd := "add", "-s", "user",
-           "graph-kit", "--", python, server, "--watch"]
-
+    cmd = [python, str(HERE / "setup.py"), "--target", "claude-code"]
     if dry_run:
+        cmd.append("--dry-run")
         print(f"\n--- would run ---")
         print("  " + " ".join(cmd))
         return
 
     result = subprocess.run(cmd, capture_output=True, text=True)
     if result.returncode == 0:
-        print(f"  Registered with Claude Code CLI ✓")
+        print(f"  Registered with Claude Code (~/.claude.json) ✓")
     else:
-        # already exists = fine
-        if "already exists" in result.stderr or "already exists" in result.stdout:
-            print(f"  Claude Code CLI: graph-kit already registered ✓")
-        else:
-            print(f"  [warn] claude mcp add failed: {result.stderr.strip()}")
+        print(f"  [warn] claude-code registration failed: {result.stderr.strip()}")
 
 
 # ── Dispatch ──────────────────────────────────────────────────────────
