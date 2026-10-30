@@ -55,10 +55,18 @@ def register_repo(repo_path: str):
 
 
 def get_conn(db_path: str = DB_PATH) -> sqlite3.Connection:
-    conn = sqlite3.connect(db_path, timeout=30)   # wait for another writer instead of failing at once with "database is locked"
-    conn.row_factory = sqlite3.Row
-    conn.execute("PRAGMA foreign_keys = ON")
-    conn.execute("PRAGMA journal_mode = WAL")
+    # timeout=30: a second writer (another MCP server on the same index.db) waits instead of failing.
+    # A sqlite3 connection that is never close()d is NOT freed when its last reference goes away; it waits
+    # for Python's cyclic GC (2 fds each: index.db + -wal). So close on every path, including here when a
+    # PRAGMA fails. Mac mini 30/10: 12 servers held ~110k such fds and the system file table filled (ENFILE).
+    conn = sqlite3.connect(db_path, timeout=30)
+    try:
+        conn.row_factory = sqlite3.Row
+        conn.execute("PRAGMA foreign_keys = ON")
+        conn.execute("PRAGMA journal_mode = WAL")
+    except Exception:
+        conn.close()
+        raise
     return conn
 
 
@@ -117,11 +125,15 @@ def get_repo_root(db_path: str) -> str | None:
     """Return the repo root stored in this DB, or None."""
     try:
         conn = get_conn(db_path)
+    except Exception:
+        return None
+    try:
         row = conn.execute("SELECT value FROM meta WHERE key='repo_root'").fetchone()
-        conn.close()
         return row["value"] if row else None
     except Exception:
         return None
+    finally:
+        conn.close()
 
 
 # ── File helpers ─────────────────────────────────────────────────────

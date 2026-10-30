@@ -67,5 +67,27 @@ class WatcherFd(unittest.TestCase):
             graph_db.delete_file_data = orig
 
 
+class DbFd(unittest.TestCase):
+    """get_conn / get_repo_root must not leave a connection open when sqlite fails."""
+    def test_get_repo_root_bad_db(self):
+        with tempfile.TemporaryDirectory() as d:
+            bad = os.path.join(d, "index.db")
+            Path(bad).write_bytes(b"not a database" * 100)
+            import gc; gc.collect(); base = open_fds()
+            for _ in range(200):
+                self.assertIsNone(graph_db.get_repo_root(bad))
+            self.assertLessEqual(open_fds() - base, 2)
+
+    def test_get_conn_pragma_fail(self):
+        with tempfile.TemporaryDirectory() as d:
+            bad = os.path.join(d, "index.db")
+            Path(bad).write_bytes(b"not a database" * 100)
+            import gc; gc.collect(); base = open_fds()
+            for _ in range(200):
+                with self.assertRaises(Exception):
+                    graph_db.get_conn(bad)
+            self.assertLessEqual(open_fds() - base, 2)
+
+
 if __name__ == "__main__":
     unittest.main()
