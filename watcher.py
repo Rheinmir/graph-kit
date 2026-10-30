@@ -72,13 +72,22 @@ class _ReindexHandler(FileSystemEventHandler):
 
         rel_path = os.path.relpath(abs_path, self.repo_path).replace("\\", "/")
 
+        # Every connection is closed in `finally`: before, an exception (e.g. "database is locked" when
+        # several MCP server instances write the same index.db) left the connection open, 2 fds each
+        # (index.db + index.db-wal). On a busy repo that exhausted the system file table (macOS ENFILE).
         if action == "delete":
-            conn = graph_db.get_conn(self.db_path)
-            graph_db.delete_file_data(conn, rel_path)
-            conn.execute("DELETE FROM files WHERE path=?", (rel_path,))
-            conn.commit()
-            conn.close()
-            print(f"[watcher] removed  {rel_path}", flush=True)
+            conn = None
+            try:
+                conn = graph_db.get_conn(self.db_path)
+                graph_db.delete_file_data(conn, rel_path)
+                conn.execute("DELETE FROM files WHERE path=?", (rel_path,))
+                conn.commit()
+                print(f"[watcher] removed  {rel_path}", flush=True)
+            except Exception as e:
+                print(f"[watcher] error    {rel_path}: {e}", file=sys.stderr, flush=True)
+            finally:
+                if conn is not None:
+                    conn.close()
             return
 
         # upsert: only process parseable files
@@ -87,15 +96,18 @@ class _ReindexHandler(FileSystemEventHandler):
         if not os.path.isfile(abs_path):
             return
 
+        conn = None
         try:
             conn = graph_db.get_conn(self.db_path)
             changed = index_file(conn, abs_path, rel_path, force=True)
             conn.commit()
-            conn.close()
             if changed:
                 print(f"[watcher] indexed  {rel_path}", flush=True)
         except Exception as e:
             print(f"[watcher] error    {rel_path}: {e}", file=sys.stderr, flush=True)
+        finally:
+            if conn is not None:
+                conn.close()
 
 
 def start_watcher(repo_path: str, db_path: str,
